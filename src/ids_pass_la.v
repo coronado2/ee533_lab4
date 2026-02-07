@@ -56,22 +56,26 @@ module ids
       input                                clk
    );
 
-   //------------------------- Passthrough-------------------------------
+   // Passthrough
    assign out_data = in_data;
    assign out_ctrl = in_ctrl;
    assign out_wr = in_wr;
    assign in_rdy = out_rdy;
    
-   assign reg_req_out = reg_req_in;
-   assign reg_ack_out = reg_ack_in;
    assign reg_rd_wr_L_out = reg_rd_wr_L_in;
    assign reg_addr_out = reg_addr_in;
-   assign reg_data_out = reg_data_in;
    assign reg_src_out = reg_src_in;
 
-   // LOGIC ANALYZER
+   // Logic Analyzer Registers
+   localparam LA_DATA_REG = 8'h20;
    wire [31:0] la_out_da;
+   wire la_data_rd = (reg_req_in && reg_rd_wr_L_in == 1'b1 && reg_addr_in == LA_DATA_REG);
+   
+   assign reg_req_out = (la_data_rd) ? 1'b0 : reg_req_in;
+   assign reg_ack_out = (la_data_rd) ? 1'b1 : reg_ack_in;
+   assign reg_data_out = la_data_rd ? {{(`CPCI_NF2_DATA_WIDTH-32){1'b0}}, la_out_da} : reg_data_in;
 
+   // LOGIC ANALYZER
    wire begin_pkt          = 1'b0;
    wire end_of_pkt         = 1'b0;
    wire [2:0] hdr_cnt      = 3'b000;
@@ -101,6 +105,4 @@ module ids
       .out_da(la_out_da)
    );
 
-
- 
 endmodule 

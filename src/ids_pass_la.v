@@ -56,30 +56,21 @@ module ids
       input                                clk
    );
 
-   // Passthrough
-   assign out_data = in_data;
-   assign out_ctrl = in_ctrl;
-   assign out_wr = in_wr;
-   assign in_rdy = out_rdy;
-   
-   assign reg_rd_wr_L_out = reg_rd_wr_L_in;
-   assign reg_addr_out = reg_addr_in;
-   assign reg_src_out = reg_src_in;
+   // Signals
 
-   // Logic Analyzer Registers
-   localparam LA_DATA_REG = 8'h20;
+      // Logic Analyzer Registers
    wire [31:0] la_out_da;
-   wire la_data_rd = (reg_req_in && reg_rd_wr_L_in == 1'b1 && reg_addr_in == LA_DATA_REG);
-   
-   assign reg_req_out = (la_data_rd) ? 1'b0 : reg_req_in;
-   assign reg_ack_out = (la_data_rd) ? 1'b1 : reg_ack_in;
-   assign reg_data_out = la_data_rd ? {{(`CPCI_NF2_DATA_WIDTH-32){1'b0}}, la_out_da} : reg_data_in;
 
-   // LOGIC ANALYZER
+      // software registers 
+   wire [31:0]                   pattern_high;
+   wire [31:0]                   pattern_low;
+   wire [31:0]                   ids_cmd;
+   // hardware registers
+   wire [31:0]                    matches = 32'h0;
+
    wire begin_pkt          = 1'b0;
    wire end_of_pkt         = 1'b0;
    wire [2:0] hdr_cnt      = 3'b000;
-   wire ids_cmd            = 1'b0;
    wire in_fifo_empty      = 1'b0;
 
    wire in_fifo_rd_en      = out_wr;
@@ -88,6 +79,13 @@ module ids
    wire matcher_reset      = reset;
    wire [1:0] state        = 2'b00;
 
+   // Passthrough
+   assign out_data = in_data;
+   assign out_ctrl = in_ctrl;
+   assign out_wr = in_wr;
+   assign in_rdy = out_rdy;
+   
+   // LOGIC ANALYZER
    logic_analyzer LA(
       .begin_pkt(begin_pkt),
       .clk(clk),
@@ -104,5 +102,42 @@ module ids
       .state(state),
       .out_da(la_out_da)
    );
+
+      generic_regs
+   #( 
+      .UDP_REG_SRC_WIDTH   (UDP_REG_SRC_WIDTH),
+      .TAG                 (`IDS_BLOCK_ADDR),          // Tag -- eg. MODULE_TAG
+      .REG_ADDR_WIDTH      (`IDS_REG_ADDR_WIDTH),     // Width of block addresses -- eg. MODULE_REG_ADDR_WIDTH
+      .NUM_COUNTERS        (0),                 // Number of counters
+      .NUM_SOFTWARE_REGS   (3),                 // Number of sw regs
+      .NUM_HARDWARE_REGS   (2)                  // Number of hw regs
+   ) module_regs (
+      .reg_req_in       (reg_req_in),
+      .reg_ack_in       (reg_ack_in),
+      .reg_rd_wr_L_in   (reg_rd_wr_L_in),
+      .reg_addr_in      (reg_addr_in),
+      .reg_data_in      (reg_data_in),
+      .reg_src_in       (reg_src_in),
+
+      .reg_req_out      (reg_req_out),
+      .reg_ack_out      (reg_ack_out),
+      .reg_rd_wr_L_out  (reg_rd_wr_L_out),
+      .reg_addr_out     (reg_addr_out),
+      .reg_data_out     (reg_data_out),
+      .reg_src_out      (reg_src_out),
+
+      // --- counters interface
+      .counter_updates  (),
+      .counter_decrement(),
+
+      // --- SW regs interface
+      .software_regs    ({ids_cmd,pattern_low,pattern_high}),
+
+      // --- HW regs interface
+      .hardware_regs    ({la_out_da, matches}),
+
+      .clk              (clk),
+      .reset            (reset)
+    );
 
 endmodule 

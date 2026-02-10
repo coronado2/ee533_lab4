@@ -12,12 +12,7 @@
 // mean "don't care".
 //
 ///////////////////////////////////////////////////////////////////////////////
-
-// PASSTHROUGH IDS.V
-
 `timescale 1ns/1ps
-
-`define IDS_BLOCK_ADDR 1
 
 module ids 
    #(
@@ -56,61 +51,27 @@ module ids
       input                                clk
    );
 
-   // Signals
+   // Define the log2 function
+   // `LOG2_FUNC
 
-      // Logic Analyzer Registers
-   wire [31:0] la_out_da;
-
-      // software registers 
-   wire [31:0]                   pattern_high;
-   wire [31:0]                   pattern_low;
+   //------------------------- Signals-------------------------------
+   
+   // software registers 
+   wire [31:0]                   ids_sw_reg;
    wire [31:0]                   ids_cmd;
    // hardware registers
-   wire [31:0]                    matches = 32'h0;
+   wire [31:0]                    ids_hw_reg;
 
-   wire begin_pkt          = 1'b0;
-   wire end_of_pkt         = 1'b0;
-   wire [2:0] hdr_cnt      = 3'b000;
-   wire in_fifo_empty      = 1'b0;
+   //------------------------- Modules-------------------------------   
 
-   wire in_fifo_rd_en      = out_wr;
-   wire in_pkt_body        = 1'b1;
-   wire matcher_match      = 1'b0;
-   wire matcher_reset      = reset;
-   wire [1:0] state        = 2'b00;
-
-   // Passthrough
-   assign out_data = in_data;
-   assign out_ctrl = in_ctrl;
-   assign out_wr = in_wr;
-   assign in_rdy = out_rdy;
-   
-   // LOGIC ANALYZER
-   logic_analyzer LA(
-      .begin_pkt(begin_pkt),
-      .clk(clk),
-      .end_of_pkt(end_of_pkt),
-      .header_counter(hdr_cnt),
-      .ids_cmd(ids_cmd),
-      .in_fifo_empty(in_fifo_empty),
-      .in_fifo_rd_en(in_fifo_rd_en),
-      .in_pkt_body(in_pkt_body),
-      .matcher_match(matcher_match),
-      .matcher_reset(matcher_reset),
-      .out_rdy(out_rdy),
-      .out_wr(out_wr),
-      .state(state),
-      .out_da(la_out_da)
-   );
-
-      generic_regs
+   generic_regs
    #( 
       .UDP_REG_SRC_WIDTH   (UDP_REG_SRC_WIDTH),
       .TAG                 (`IDS_BLOCK_ADDR),          // Tag -- eg. MODULE_TAG
       .REG_ADDR_WIDTH      (`IDS_REG_ADDR_WIDTH),     // Width of block addresses -- eg. MODULE_REG_ADDR_WIDTH
       .NUM_COUNTERS        (0),                 // Number of counters
-      .NUM_SOFTWARE_REGS   (3),                 // Number of sw regs
-      .NUM_HARDWARE_REGS   (2)                  // Number of hw regs
+      .NUM_SOFTWARE_REGS   (2),                 // Number of sw regs
+      .NUM_HARDWARE_REGS   (1)                  // Number of hw regs
    ) module_regs (
       .reg_req_in       (reg_req_in),
       .reg_ack_in       (reg_ack_in),
@@ -131,13 +92,20 @@ module ids
       .counter_decrement(),
 
       // --- SW regs interface
-      .software_regs    ({ids_cmd,pattern_low,pattern_high}),
+      .software_regs    ({ids_cmd,ids_sw_reg}),
 
       // --- HW regs interface
-      .hardware_regs    ({la_out_da, matches}),
+      .hardware_regs    (ids_hw_reg),
 
       .clk              (clk),
       .reset            (reset)
     );
 
-endmodule 
+   //------------------------- Logic-------------------------------
+   
+   assign out_data = in_data;
+   assign out_ctrl = in_ctrl;
+   assign out_wr = in_wr;
+   assign in_rdy = out_rdy;
+   assign ids_hw_reg = {ids_sw_reg[7:0], ids_sw_reg[15:8], ids_sw_reg[23:16], ids_sw_reg[31:24]};
+ endmodule 

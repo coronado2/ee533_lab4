@@ -64,13 +64,21 @@ module ids
 
    wire                           in_fifo_rd_en;
 
-   // software registers 
-   wire [31:0]                   ids_sw_reg;
+   // software registers
+   wire [31:0]                   pattern_high;
+   wire [31:0]                   pattern_low;
    wire [31:0]                   ids_cmd;
 
    // hardware registers
-   wire [31:0]                   ids_hw_reg;
+   wire [31:0]                   matches;
    wire [31:0]                   la_data_out;
+
+   //------------------------- Local assignments -------------------------------
+
+   assign in_rdy     = !in_fifo_nearly_full;
+   assign matcher_en = 1'b1;
+   assign matcher_ce = (!in_fifo_empty && out_rdy);
+   assign matcher_reset = (reset || ids_cmd[0]);
 
    //------------------------- Modules-------------------------------   
 
@@ -90,13 +98,23 @@ module ids
       .clk           (clk)
    );
 
+   detect7B matcher (
+      .ce            (matcher_ce),           // data enable
+      .match_en      (matcher_en),           // match enable
+      .clk           (clk),
+      .pipe1         ({in_ctrl, in_data}),   // Data in
+      .hwregA        ({pattern_high, pattern_low}),   // pattern in
+      .match         (matcher_match),        // match out
+      .mrst          (matcher_reset)         // reset in
+   );
+
    generic_regs
    #( 
       .UDP_REG_SRC_WIDTH   (UDP_REG_SRC_WIDTH),
       .TAG                 (`IDS_BLOCK_ADDR),          // Tag -- eg. MODULE_TAG
       .REG_ADDR_WIDTH      (`IDS_REG_ADDR_WIDTH),     // Width of block addresses -- eg. MODULE_REG_ADDR_WIDTH
       .NUM_COUNTERS        (0),                 // Number of counters
-      .NUM_SOFTWARE_REGS   (2),                 // Number of sw regs
+      .NUM_SOFTWARE_REGS   (3),                 // Number of sw regs
       .NUM_HARDWARE_REGS   (2)                  // Number of hw regs
    ) module_regs (
       .reg_req_in       (reg_req_in),
@@ -118,10 +136,10 @@ module ids
       .counter_decrement(),
 
       // --- SW regs interface
-      .software_regs    ({ids_cmd,ids_sw_reg}),
+      .software_regs    ({ids_cmd, pattern_low, pattern_high}),
 
       // --- HW regs interface
-      .hardware_regs    ({la_data_out, ids_hw_reg}),
+      .hardware_regs    ({la_data_out, matches}),
 
       .clk              (clk),
       .reset            (reset)
@@ -132,10 +150,8 @@ module ids
    assign out_data = in_data;
    assign out_ctrl = in_ctrl;
    assign out_wr = in_wr;
-   assign in_rdy = out_rdy;
-   assign ids_hw_reg = {ids_sw_reg[7:0], ids_sw_reg[15:8], ids_sw_reg[23:16], ids_sw_reg[31:24]};
 
    assign in_fifo_rd_en = 1'b0;
-   assign la_data_out = {in_fifo_ctrl[7:0], in_fifo_data[15:0], 8'b0};
+   assign la_data_out = {in_fifo_ctrl[7:0], in_fifo_data[15:0], 7'b0, matcher_match};
 
  endmodule 

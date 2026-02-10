@@ -1,0 +1,29 @@
+<nf:module xmlns:nf="http://www.NetFPGA.org/NF2_register_system" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.NetFPGA.org/NF2_register_system NF2_register_system.xsd ">
+  <nf:name>ids</nf:name>
+  <nf:prefix>ids</nf:prefix>
+  <nf:location>udp</nf:location>
+  <nf:description>Registers for IDS</nf:description>
+  <nf:blocksize>64</nf:blocksize>
+  <nf:registers>
+    <nf:register>
+      <nf:name>ids_sw_reg</nf:name>
+      <nf:description>ids_sw_reg</nf:description>
+      <nf:type>generic_software32</nf:type>
+    </nf:register>
+    <nf:register>
+      <nf:name>ids_cmd</nf:name>
+      <nf:description>ids_cmd</nf:description>
+      <nf:type>generic_software32</nf:type>
+    </nf:register>
+    <nf:register>
+      <nf:name>ids_hw_reg</nf:name>
+      <nf:description>ids_hw_reg</nf:description>
+      <nf:type>generic_hardware32</nf:type>
+    </nf:register>
+      <nf:register>
+      <nf:name>la_data_out</nf:name>
+      <nf:description>la_data_out</nf:description>
+      <nf:type>generic_hardware32</nf:type>
+    </nf:register>
+  </nf:registers>
+</nf:module>

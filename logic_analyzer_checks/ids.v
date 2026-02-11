@@ -62,23 +62,42 @@ module ids
    wire                          in_fifo_nearly_full;
    wire                          in_fifo_empty;
 
-   wire                           in_fifo_rd_en;
+   reg                           in_fifo_rd_en;
+   reg                           out_wr_int;
 
    // software registers
    wire [31:0]                   pattern_high;
    wire [31:0]                   pattern_low;
    wire [31:0]                   ids_cmd;
-
    // hardware registers
-   wire [31:0]                   matches;
+   reg [31:0]                    matches;
    wire [31:0]                   la_data_out;
+   
+   // internal state
+   reg [1:0]                     state, state_next;
+   reg [31:0]                    matches_next;
+   reg                           in_pkt_body, in_pkt_body_next;
+   reg                           end_of_pkt, end_of_pkt_next;
+   reg                           begin_pkt, begin_pkt_next;
+   reg [2:0]                     header_counter, header_counter_next;
+   reg                           counter;
+
+   // logic analyzer
+   wire [9:0]                    la_samples_captured;
+   wire [71:0]                   la_capture_data;
+   wire                          la_capture_trigger;
+
+   // local parameter
+   parameter                     START = 2'b00;
+   parameter                     HEADER = 2'b01;
+   parameter                     PAYLOAD = 2'b10;
 
    //------------------------- Local assignments -------------------------------
 
    assign in_rdy     = !in_fifo_nearly_full;
-   assign matcher_en = 1'b1;
+   assign matcher_en = in_pkt_body;
    assign matcher_ce = (!in_fifo_empty && out_rdy);
-   assign matcher_reset = (reset || ids_cmd[0]);
+   assign matcher_reset = (reset || ids_cmd[0] || end_of_pkt);
 
    //------------------------- Modules-------------------------------   
 
@@ -106,6 +125,20 @@ module ids
       .hwregA        ({pattern_high, pattern_low}),   // pattern in
       .match         (matcher_match),        // match out
       .mrst          (matcher_reset)         // reset in
+   );
+
+   dropfifo drop_fifo (
+      .clk           (clk),
+      .drop_pkt      (1'b0),
+      //.drop_pkt      (matcher_match && end_of_pkt), 
+      .fiforead      (out_rdy), 
+      .fifowrite     (out_wr_int), 
+      .firstword     (begin_pkt), 
+      .in_fifo       ({in_fifo_ctrl,in_fifo_data}), 
+      .lastword      (end_of_pkt), 
+      .rst           (reset), 
+      .out_fifo      ({out_ctrl,out_data}), 
+      .valid_data    (out_wr)
    );
 
    generic_regs
@@ -145,13 +178,116 @@ module ids
       .reset            (reset)
     );
 
-   //------------------------- Logic-------------------------------
-   
-   assign out_data = in_data;
-   assign out_ctrl = in_ctrl;
-   assign out_wr = in_wr;
+   logic_analyzer 
+   #(
+      .ADDR_WIDTH(10),
+      .DATA_WIDTH(72)
+   ) la (
+      .clk(clk),
+      .reset(reset),
+      .capture_enable(ids_cmd[1]),
+      .capture_reset(ids_cmd[2]),
+      .read_addr(pattern_high[9:0]),
+      .word_select(pattern_high[11:10]),
+      .capture_data(la_capture_data),
+      .capture_trigger(la_capture_trigger),
+      .samples_captured(la_samples_captured),
+      .data_out(la_data_out)
+   );
 
-   assign in_fifo_rd_en = 1'b0;
-   assign la_data_out = {in_fifo_ctrl[7:0], in_fifo_data[15:0], 7'b0, matcher_match};
+   //------------------------- Logic-------------------------------
+
+   always @(*) begin
+      state_next = state;
+      matches_next = matches;
+      header_counter_next = header_counter;
+      in_fifo_rd_en = 0;
+      out_wr_int = 0;
+      //out_data = 0;
+      end_of_pkt_next = end_of_pkt;
+      in_pkt_body_next = in_pkt_body;
+      begin_pkt_next = begin_pkt;
+      
+      if (!in_fifo_empty && out_rdy) begin
+         out_wr_int = 1;
+         in_fifo_rd_en = 1;
+         //out_data = in_fifo_data;
+         
+         case(state)
+            START: begin
+               if (in_fifo_ctrl != 0) begin
+                  state_next = HEADER;
+                  begin_pkt_next = 1;
+                  end_of_pkt_next = 0;   // takes matcher out of reset
+               end
+            end
+            HEADER: begin
+               begin_pkt_next = 0;
+               if (in_fifo_ctrl == 0) begin
+                  header_counter_next = header_counter + 1'b1;
+                  if (header_counter_next == 3) begin
+                    state_next = PAYLOAD;
+                  end
+               end
+            end
+            PAYLOAD: begin
+               if (in_fifo_ctrl != 0) begin
+                  state_next = START;
+                  header_counter_next = 0;
+                  if (matcher_match) begin
+                     matches_next = matches + 1;
+                  end
+                  end_of_pkt_next = 1;   // will reset matcher
+                  in_pkt_body_next = 0;
+               end
+               else begin
+                  in_pkt_body_next = 1;
+               end
+            end
+         endcase // case(state)
+      end
+   end // always @ (*)
+   
+   always @(posedge clk) begin
+      if(reset) begin
+         matches <= 0;
+         header_counter <= 0;
+         state <= START;
+         begin_pkt <= 0;
+         end_of_pkt <= 0;
+         in_pkt_body <= 0;
+      end
+      else begin
+         if (ids_cmd[0]) matches <= 0;
+         else matches <= matches_next;
+         header_counter <= header_counter_next;
+         state <= state_next;
+         begin_pkt <= begin_pkt_next;
+         end_of_pkt <= end_of_pkt_next;
+         in_pkt_body <= in_pkt_body_next;
+         counter <= 0;
+      end // else: !if(reset)
+   end // always @ (posedge clk)
+   
+   assign la_capture_data = {
+      in_fifo_ctrl,  
+      in_fifo_data[63:32],      
+      state[1:0],               
+      header_counter[2:0],      
+      matcher_match,             
+      matcher_en,               
+      matcher_ce,            
+      begin_pkt,               
+      end_of_pkt,              
+      in_pkt_body,              
+      in_fifo_empty,        
+      out_rdy,                
+      in_fifo_rd_en,            
+      out_wr_int,            
+      out_wr,                 
+      in_fifo_data[31:16]        
+   };
+
+   assign la_capture_trigger = in_fifo_rd_en || in_wr;
 
  endmodule 

@@ -6,8 +6,13 @@
   <nf:blocksize>64</nf:blocksize>
   <nf:registers>
     <nf:register>
-      <nf:name>ids_sw_reg</nf:name>
-      <nf:description>ids_sw_reg</nf:description>
+      <nf:name>pattern_high</nf:name>
+      <nf:description>pattern_high</nf:description>
+      <nf:type>generic_software32</nf:type>
+    </nf:register>
+    <nf:register>
+      <nf:name>pattern_low</nf:name>
+      <nf:description>pattern_low</nf:description>
       <nf:type>generic_software32</nf:type>
     </nf:register>
     <nf:register>
@@ -16,8 +21,13 @@
       <nf:type>generic_software32</nf:type>
     </nf:register>
     <nf:register>
-      <nf:name>ids_hw_reg</nf:name>
-      <nf:description>ids_hw_reg</nf:description>
+      <nf:name>matches</nf:name>
+      <nf:description>matches</nf:description>
+      <nf:type>generic_hardware32</nf:type>
+    </nf:register>
+    <nf:register>
+      <nf:name>la_data_out</nf:name>
+      <nf:description>la_data_out</nf:description>
       <nf:type>generic_hardware32</nf:type>
     </nf:register>
   </nf:registers>
